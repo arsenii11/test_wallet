@@ -1,5 +1,7 @@
 package com.example.test_wallet.data.api
 
+import com.example.test_wallet.data.api.model.EsploraAddressInfo
+import com.example.test_wallet.data.api.model.EsploraUtxoResponse
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.http.Body
