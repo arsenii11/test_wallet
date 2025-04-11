@@ -76,7 +76,13 @@ class MainViewModel(
                 _transactionResult.value = it
             }.onFailure { e ->
                 Log.e("SendTx", "❌ Error: ${e.message}", e)
-                _transactionResult.value = "error:${e.message}"
+
+                // Специфично обрабатываем недостаток средств
+                if (e is org.bitcoinj.core.InsufficientMoneyException) {
+                    _transactionResult.value = "error:Insufficient balance to cover amount + fee"
+                } else {
+                    _transactionResult.value = "error:${e.message ?: "Transaction failed"}"
+                }
             }
         }
     }

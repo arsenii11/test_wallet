@@ -168,13 +168,24 @@ class WalletManager(
     suspend fun broadcastTransaction(hex: String): String {
         Log.d("WalletManager", "Broadcasting transaction. Length: ${hex.length}")
         val body = RequestBody.create("text/plain".toMediaTypeOrNull(), hex)
-        val response = api.broadcastTx(body)
-        val responseBody = response.string()
-        Log.d("WalletManager", "TX successfully broadcast: $responseBody")
-        cachedUtxos = emptyList()
 
-        return responseBody
+        try {
+            val response = api.broadcastTx(body)
+            val responseBody = response.string()
+            Log.d("WalletManager", "TX successfully broadcast: $responseBody")
+
+            cachedUtxos = emptyList()
+            return responseBody
+        } catch (e: retrofit2.HttpException) {
+            if (e.code() == 400) {
+                Log.e("WalletManager", "HTTP 400: Invalid transaction or insufficient funds")
+                throw IllegalArgumentException("Insufficient funds or invalid transaction")
+            } else {
+                throw e
+            }
+        }
     }
+
 
     suspend fun getTransactionHistory(): List<HistoryItem> {
         val txs = api.getTransactions(address)
