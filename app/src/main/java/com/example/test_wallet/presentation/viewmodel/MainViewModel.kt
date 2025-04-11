@@ -1,5 +1,6 @@
 package com.example.test_wallet.presentation.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.test_wallet.data.repository.WalletManager
@@ -55,16 +56,35 @@ class MainViewModel(
 
     fun sendBitcoin(toAddress: String, amountSat: Long) {
         viewModelScope.launch {
+            val supported = toAddress.startsWith("m") ||
+                    toAddress.startsWith("n") ||
+                    toAddress.startsWith("tb1q")
+
+            if (!supported) {
+                _transactionResult.value = "error:Unsupported address format (use tb1q... or m...)"
+                return@launch
+            }
+
+            Log.d("SendTx", "⏳ Creating transaction to $toAddress for $amountSat satoshis")
+
             runCatching {
                 val hex = walletManager.createTransaction(toAddress, amountSat)
+                Log.d("SendTx", "✅ TX Hex: $hex")
                 walletManager.broadcastTransaction(hex)
             }.onSuccess {
+                Log.d("SendTx", "🚀 Broadcast success! TX ID: $it")
                 _transactionResult.value = it
-            }.onFailure {
-                _transactionResult.value = "error:${it.message}"
+            }.onFailure { e ->
+                Log.e("SendTx", "❌ Error: ${e.message}", e)
+                _transactionResult.value = "error:${e.message}"
             }
         }
     }
+
+    fun resetTransactionState() {
+        _transactionResult.value = null
+    }
+
 
     private val _history = MutableStateFlow<List<HistoryItem>>(emptyList())
     val history: StateFlow<List<HistoryItem>> = _history

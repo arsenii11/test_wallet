@@ -10,11 +10,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.test_wallet.presentation.viewmodel.MainViewModel
@@ -30,8 +33,8 @@ fun MainScreen(
     val transactionResult by viewModel.transactionResult.collectAsState()
 
     val context = LocalContext.current
-    var toAddress by remember { mutableStateOf("") }
-    var amountToSend by remember { mutableStateOf("") }
+    var toAddress by rememberSaveable  { mutableStateOf("") }
+    var amountToSend by rememberSaveable { mutableStateOf("") }
 
     var showSuccessDialog by remember { mutableStateOf(false) }
     var txId by remember { mutableStateOf("") }
@@ -80,21 +83,52 @@ fun MainScreen(
             modifier = Modifier
                 .padding(bottom = 16.dp)
                 .clickable {
-                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val clipboard =
+                        context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
                     val clip = ClipData.newPlainText("Wallet Address", viewModel.walletAddress)
                     clipboard.setPrimaryClip(clip)
 
-                    Toast.makeText(context, "Address copied to clipboard", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Address copied to clipboard", Toast.LENGTH_SHORT)
+                        .show()
                 }
         )
 
+        var amountTextField by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+            mutableStateOf(TextFieldValue(""))
+        }
+
         OutlinedTextField(
-            value = amountToSend,
-            onValueChange = { amountToSend = it },
+            value = amountTextField,
+            onValueChange = { newValue ->
+                val raw = newValue.text.replace(",", ".")
+                val originalCursor = newValue.selection.start
+
+                var fixed = raw
+
+                if (raw.startsWith("0") && !raw.startsWith("0.")) {
+                    val digitsOnly = raw.trimStart('0')
+                    val afterZero = if (digitsOnly.startsWith(".")) digitsOnly else ".$digitsOnly"
+                    fixed = "0$afterZero"
+                }
+
+                val dotCount = fixed.count { it == '.' }
+                val isValidFormat = fixed.matches(Regex("^\\d*\\.?\\d{0,8}$")) && dotCount <= 1
+
+                if (isValidFormat) {
+                    val cursorOffset = fixed.length - raw.length + originalCursor
+                    amountTextField = TextFieldValue(
+                        text = fixed,
+                        selection = TextRange(cursorOffset.coerceIn(0, fixed.length))
+                    )
+                }
+            },
             label = { Text("Amount to send (tBTC)") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
         )
+
+
+
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -107,15 +141,26 @@ fun MainScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        val isFormValid = toAddress.isNotBlank() &&
+                amountTextField.text.toDoubleOrNull()?.let { it > 0 } == true
+
         Button(
             onClick = {
-                val satoshis = (amountToSend.toDoubleOrNull() ?: 0.0) * 100_000_000L
-                viewModel.sendBitcoin(toAddress.trim(), satoshis.toLong())
+                val trimmedAddress = toAddress.replace("\\s".toRegex(), "")
+                if (!isFormValid) {
+                    Toast.makeText(context, "Enter a valid amount and address", Toast.LENGTH_SHORT).show()
+                } else {
+                    val satoshis = (amountTextField.text.toDoubleOrNull() ?: 0.0) * 100_000_000L
+                    viewModel.sendBitcoin(trimmedAddress, satoshis.toLong())
+                }
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.small,
+            enabled = isFormValid
         ) {
             Text("Send")
         }
+
 
         if (transactionResult?.startsWith("error:") == true) {
             Text(
@@ -135,7 +180,8 @@ fun MainScreen(
 
         TextButton(
             onClick = onHistoryClick,
-            modifier = Modifier.align(Alignment.End)
+            modifier = Modifier.align(Alignment.End),
+            shape = MaterialTheme.shapes.small
         ) {
             Text("View transaction history")
         }
@@ -143,25 +189,47 @@ fun MainScreen(
 
     if (showSuccessDialog) {
         AlertDialog(
-            onDismissRequest = {},
-            title = { Text("Your funds have been sent!") },
+            onDismissRequest = {
+                showSuccessDialog = false
+            },
+            title = {
+                Text(
+                    "Success!",
+                    style = MaterialTheme.typography.headlineSmall
+                )
+            },
             text = {
-                TextButton(onClick = {
-                    onTxClick(txId)
-                }) {
-                    Text("Your transaction ID is ${txId.take(18)}...", fontSize = 13.sp)
+                Column {
+                    Text("Your funds have been sent successfully.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "TX ID: ${txId.take(18)}...",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             },
             confirmButton = {
                 Button(onClick = {
                     showSuccessDialog = false
+                    viewModel.resetTransactionState()
                     viewModel.loadBalance()
                 }) {
-                    Text("Send more")
+                    Text("Close")
+                }
+
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showSuccessDialog = false
+                    onTxClick(txId) // откроем в браузере
+                }) {
+                    Text("View TX")
                 }
             }
         )
     }
+
 }
 
 private fun balanceText(balance: Long?): String {

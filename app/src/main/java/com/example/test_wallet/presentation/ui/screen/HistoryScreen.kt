@@ -52,7 +52,7 @@ fun HistoryScreen(
                     .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
 
                 Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                    Text("$icon ${tx.direction} ${tx.amountSat / 100_000_000.0} tBTC", color = color)
+                    Text("$icon ${tx.direction} ${formatSatsToBTC(tx.amountSat)} tBTC", color = color)
                     Text("ID: ${tx.txid.take(10)}...", fontSize = 12.sp)
                     Text("Time: $formatted", fontSize = 12.sp)
                     Divider(modifier = Modifier.padding(top = 4.dp))
@@ -60,4 +60,10 @@ fun HistoryScreen(
             }
         }
     }
+}
+
+
+fun formatSatsToBTC(sats: Long): String {
+    val btc = sats.toDouble() / 100_000_000
+    return String.format("%.8f", btc).trimEnd('0').trimEnd('.')
 }
