@@ -1,6 +1,7 @@
 package com.example.test_wallet.data.api
 
 import com.example.test_wallet.data.api.model.EsploraAddressInfo
+import com.example.test_wallet.data.api.model.EsploraTxResponse
 import com.example.test_wallet.data.api.model.EsploraUtxoResponse
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
@@ -18,4 +19,7 @@ interface EsploraApiService {
 
     @POST("tx")
     suspend fun broadcastTx(@Body txHex: RequestBody): ResponseBody
+
+    @GET("address/{address}/txs")
+    suspend fun getTransactions(@Path("address") address: String): List<EsploraTxResponse>
 }

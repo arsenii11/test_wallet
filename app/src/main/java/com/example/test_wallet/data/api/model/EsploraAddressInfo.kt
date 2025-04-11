@@ -2,7 +2,8 @@ package com.example.test_wallet.data.api.model
 
 data class EsploraAddressInfo(
     val address: String,
-    val chain_stats: ChainStats
+    val chain_stats: ChainStats,
+    val mempool_stats: ChainStats
 )
 
 data class ChainStats(

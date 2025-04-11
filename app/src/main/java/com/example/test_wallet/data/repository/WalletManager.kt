@@ -1,8 +1,12 @@
 package com.example.test_wallet.data.repository
 
+import android.content.Context
 import com.example.test_wallet.data.api.EsploraApiService
 import com.example.test_wallet.data.api.model.EsploraUtxoResponse
 import com.example.test_wallet.data.network.SignetParams
+import com.example.test_wallet.domain.model.HistoryItem
+import com.example.test_wallet.domain.model.TxDirection
+import com.example.test_wallet.domain.model.WalletBalance
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -12,26 +16,39 @@ import org.bitcoinj.script.Script
 import org.bitcoinj.script.ScriptBuilder
 import org.bitcoinj.wallet.SendRequest
 import org.bitcoinj.wallet.Wallet
+import java.io.File
 
 class WalletManager(
-    private val api: EsploraApiService
+    private val api: EsploraApiService,
+    private val context: Context
 ) {
     private val network: NetworkParameters = SignetParams
-    private val wallet: Wallet = Wallet.createDeterministic(
-        network,
-        Script.ScriptType.P2PKH
-    )
+
+    private val walletFile = File(context.filesDir, "wallet.dat")
+
+    private val wallet: Wallet = if (walletFile.exists()) {
+        Wallet.loadFromFile(walletFile)
+    } else {
+        Wallet.createDeterministic(SignetParams, Script.ScriptType.P2PKH).also {
+            it.saveToFile(walletFile)
+        }
+    }
+
 
     val address: String
-        get() = wallet.freshReceiveAddress().toString()
+        get() = wallet.currentReceiveAddress().toString()
 
     suspend fun getUtxos(): List<EsploraUtxoResponse> {
         return api.getUtxos(address)
     }
 
-    suspend fun getBalance(): Long {
-        val utxos = getUtxos()
-        return utxos.sumOf { it.value }
+
+    suspend fun getBalanceFull(): WalletBalance {
+        val info = api.getAddressInfo(address)
+        return WalletBalance(
+            confirmed = info.chain_stats.balance,
+            pending = info.mempool_stats.balance
+        )
     }
 
     suspend fun createTransaction(
@@ -74,6 +91,24 @@ class WalletManager(
         val body = RequestBody.create("text/plain".toMediaTypeOrNull(), hex)
         val response = api.broadcastTx(body)
         return response.string()
+    }
+
+    suspend fun getTransactionHistory(): List<HistoryItem> {
+        val txs = api.getTransactions(address)
+        return txs.mapNotNull { tx ->
+            val time = tx.status.block_time ?: return@mapNotNull null
+            val isSent = tx.vin.any { it.prevout?.scriptpubkey_address == address }
+            val amount = tx.vout
+                .filter { it.scriptpubkey_address != address }
+                .sumOf { it.value }
+
+            HistoryItem(
+                txid = tx.txid,
+                timestamp = time,
+                direction = if (isSent) TxDirection.Sent else TxDirection.Received,
+                amountSat = amount
+            )
+        }
     }
 
     private fun ByteArray.toHex(): String =

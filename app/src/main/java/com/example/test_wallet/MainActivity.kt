@@ -7,7 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
-import com.example.test_wallet.presentation.ui.screen.MainScreen
+import com.example.test_wallet.presentation.BitcoinWalletApp
 import com.example.test_wallet.presentation.ui.theme.TestWalletTheme
 
 class MainActivity : ComponentActivity() {
@@ -16,10 +16,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             TestWalletTheme {
                 val context = LocalContext.current
-
                 var txIdToOpen by remember { mutableStateOf<String?>(null) }
 
-                MainScreen(
+                BitcoinWalletApp(
                     onTxClick = { txId ->
                         txIdToOpen = txId
                     }
